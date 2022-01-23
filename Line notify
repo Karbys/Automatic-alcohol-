@@ -1,0 +1,157 @@
+void Line_Notify(String message) ;
+
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecureAxTLS.h>
+   
+// Config connect WiFi
+#define WIFI_SSID "."
+#define WIFI_PASSWORD "12345688"
+
+// Line config
+#define LINE_TOKEN "R6e5SK1lTvjsTCiMnMkHDH46PzKZQIa4J7T5VojwYxe"       //ใส่ Token key จาก Line
+
+
+/* LAB 0x06 Ultrasonic sensor Control DC Motor */
+const int Motor_1 = D3;               //D3
+long distance = 0.0;                //variable distance
+/* Sensor */
+const int ult_trig = D5;             //D5
+const int ult_echo = D6;             //D6
+
+/* Buzzer */
+int beep = D4;                           //pin D4
+int Number = 0;
+bool Notified = false;
+
+/* Define Function */
+long microsecondsToCentimeters(long microseconds);
+long ReadSensor(void);
+void Beep(int num);
+
+
+String message1 = " ถูกใช้ครบ 5 ครั้งเเล้ว ";         // ArduinoIDE เวอร์ชั่นใหม่ ๆ ใส่ภาษาไทยลงไปได้เลย
+
+void setup()
+{
+  //Initial
+  Serial.begin(115200);
+  pinMode(ult_trig, OUTPUT);          //Setup PIN Mode
+  pinMode(ult_echo, INPUT);           //Setup PIN Mode  
+  pinMode(Motor_1, OUTPUT);         //Setup PIN Mode Output
+  digitalWrite(Motor_1, HIGH);       //Off motor
+
+   pinMode(beep,OUTPUT);            //Buzzer
+ 
+  Serial.println("Start...Project");  
+ 
+  WiFi.mode(WIFI_STA);
+
+  // connect to wifi.
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("connecting");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("connected: ");
+  Serial.println(WiFi.localIP());
+
+}
+
+void loop()
+{
+  distance = ReadSensor();                 //Read Sensor    
+  Serial.print("Duration is: ");
+  Serial.print(distance);
+  Serial.println(" cm.");      
+  if(distance < 10){                               //if distance < 10 cm.  
+    digitalWrite(Motor_1, LOW);          //On Motor
+    delay(1000);                                     //Delay 3 second
+     digitalWrite(Motor_1, HIGH);          //Off Motor
+    Beep(2);
+    ++Number;//On Speaker Buzzer 2 time
+  }
+  else
+  {
+    digitalWrite(Motor_1, HIGH);          //Off motor
+  }
+  if(Number%5 == 0 && Number > 0 &&!Notified)
+  {
+    Line_Notify(message1);
+    Notified = true;
+  }
+  if(Number%5 != 0)
+  {
+    Notified = false;
+  }
+  delay(10);
+}
+
+long microsecondsToCentimeters(long microseconds)
+{
+  // The speed of sound is 340 m/s or 29 microseconds per centimeter.
+  // The ping travels out and back, so to find the distance of the
+  // object we take half of the distance travelled.
+  return microseconds / 29 / 2;
+}
+
+long ReadSensor(void)
+{
+  long duration, cm;        
+  digitalWrite(ult_trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ult_trig, HIGH);                                //Pulse Trig Signal for start measurement.
+  delayMicroseconds(5);
+  digitalWrite(ult_trig, LOW);
+  pinMode(ult_echo, INPUT);
+  duration = pulseIn(ult_echo, HIGH);                   //Read Timing Echo form sensor
+  cm = microsecondsToCentimeters(duration);
+  return cm;
+}
+
+/* Beep */
+void Beep(int num){  
+   while(num){
+    digitalWrite(beep,LOW);             //on beep
+    delay(100);
+    digitalWrite(beep,HIGH);           //off beep
+    delay(100);
+    num--;
+   }
+}
+void Line_Notify(String message1) {
+  axTLS::WiFiClientSecure client; // กรณีขึ้น Error ให้ลบ axTLS:: ข้างหน้าทิ้ง
+
+  if (!client.connect("notify-api.line.me", 443)) {
+    Serial.println("connection failed");
+    return;  
+  }
+
+  String req = "";
+  req += "POST /api/notify HTTP/1.1\r\n";
+  req += "Host: notify-api.line.me\r\n";
+  req += "Authorization: Bearer " + String(LINE_TOKEN) + "\r\n";
+  req += "Cache-Control: no-cache\r\n";
+  req += "User-Agent: ESP8266\r\n";
+  req += "Connection: close\r\n";
+  req += "Content-Type: application/x-www-form-urlencoded\r\n";
+  req += "Content-Length: " + String(String("message=" + message1).length()) + "\r\n";
+  req += "\r\n";
+  req += "message=" + message1;
+  // Serial.println(req);
+  client.print(req);
+   
+  delay(10);
+
+  // Serial.println("-------------");
+  while(client.connected()) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      break;
+    }
+    //Serial.println(line);
+  }
+   Serial.println("--ส่งข้อความแล้วจ้า-");
+}
